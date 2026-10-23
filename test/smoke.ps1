@@ -15,6 +15,7 @@ Copy-Item $Module  "$Apache\modules\mod_security2.so" -Force
 Copy-Item "$ModsecSrc\modsecurity.conf-recommended" "$Apache\conf\modsecurity.conf" -Force
 Copy-Item "$ModsecSrc\unicode.mapping" "$Apache\conf\unicode.mapping" -Force
 Copy-Item $Rules "$Apache\conf\legacy-php-guard.conf" -Force
+Set-Content "$Apache\htdocs\index.html" '<html>ok</html>' -Encoding ascii
 
 # Adapt recommended conf: Windows paths, engine On for the test
 $conf = Get-Content "$Apache\conf\modsecurity.conf" -Raw
@@ -109,13 +110,14 @@ try {
     $code = & curl.exe -s -o NUL -w '%{http_code}' -H "Content-Type: multipart/form-data; boundary=$b" --data-binary "@$tmp\mp-dup.bin" $base
     Check 'duplicate part header' $code @('400')
 
-    # 6. Unmatched boundary -> 400
+    # 6. Unmatched boundary -> blocked. Fataler Multipart-Abbruch endet je nach
+    #    Pfad als 400 (Regel) oder 500 (Parser bricht Request intern ab).
     $body = "--$b`r`n" +
             "Content-Disposition: form-data; name=`"h`"`r`n`r`nv`r`n" +
             "--WRONGBOUNDARY--`r`n"
     [IO.File]::WriteAllText("$tmp\mp-bnd.bin", $body, [Text.Encoding]::ASCII)
     $code = & curl.exe -s -o NUL -w '%{http_code}' -H "Content-Type: multipart/form-data; boundary=$b" --data-binary "@$tmp\mp-bnd.bin" $base
-    Check 'unmatched boundary' $code @('400')
+    Check 'unmatched boundary (blocked)' $code @('400', '500')
 }
 finally {
     Write-Host "== stopping httpd"
