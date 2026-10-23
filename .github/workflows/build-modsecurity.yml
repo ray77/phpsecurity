@@ -17,6 +17,7 @@ jobs:
   build:
     # windows-2022 = Visual Studio 2022 = VS17 toolchain (matches Apache Lounge VS17)
     runs-on: windows-2022
+    timeout-minutes: 30
     defaults:
       run:
         shell: pwsh
@@ -35,13 +36,15 @@ jobs:
           curl.exe -sSL --connect-timeout 30 --max-time 300 --retry 3 -o modsec.tar.gz "https://github.com/owasp-modsecurity/ModSecurity/releases/download/v$($env:MODSEC_VERSION)/modsecurity-v$($env:MODSEC_VERSION).tar.gz"
           $h = (Get-FileHash modsec.tar.gz -Algorithm SHA256).Hash.ToLower()
           if ($h -ne $env:MODSEC_SHA256) { throw "ModSecurity SHA256 mismatch: $h" }
-          tar xzf modsec.tar.gz -C $env:RUNNER_TEMP
+          cmake -E tar xzf modsec.tar.gz
+          Move-Item "modsecurity-v$($env:MODSEC_VERSION)" "$env:RUNNER_TEMP\" -Force
 
       - name: Verify and extract libxml2 source (vendored)
         run: |
           $h = (Get-FileHash "sdk/libxml2-$($env:LIBXML2_VERSION).tar.xz" -Algorithm SHA256).Hash.ToLower()
           if ($h -ne $env:LIBXML2_SHA256) { throw "libxml2 SHA256 mismatch: $h" }
-          tar xf "sdk/libxml2-$($env:LIBXML2_VERSION).tar.xz" -C $env:RUNNER_TEMP
+          cmake -E tar xf "sdk/libxml2-$($env:LIBXML2_VERSION).tar.xz"
+          Move-Item "libxml2-$($env:LIBXML2_VERSION)" "$env:RUNNER_TEMP\" -Force
 
       - name: Build libxml2 (static, minimal)
         run: |
