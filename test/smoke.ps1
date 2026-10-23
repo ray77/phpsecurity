@@ -22,7 +22,7 @@ $conf = $conf -replace 'SecRuleEngine DetectionOnly', 'SecRuleEngine On'
 $conf = $conf -replace 'SecTmpDir /tmp/', "SecTmpDir `"$aroot/logs/`""
 $conf = $conf -replace 'SecDataDir /tmp/', "SecDataDir `"$aroot/logs/`""
 $conf = $conf -replace 'SecAuditLog /var/log/modsec_audit.log', "SecAuditLog `"$aroot/logs/modsec_audit.log`""
-$conf = $conf -replace 'SecUnicodeMapFile unicode.mapping', 'SecUnicodeMapFile conf/unicode.mapping'
+# SecUnicodeMapFile ist relativ zur Config-Datei; unicode.mapping liegt daneben in conf/
 Set-Content "$Apache\conf\modsecurity.conf" $conf -Encoding ascii
 
 @"

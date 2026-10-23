@@ -22,8 +22,10 @@ Die recommended-Konfiguration enthält Unix-Pfade. Ändern:
 SecTmpDir  "D:/Apache24/logs/"
 SecDataDir "D:/Apache24/logs/"
 SecAuditLog "D:/Apache24/logs/modsec_audit.log"
-SecUnicodeMapFile conf/unicode.mapping 20127
 ```
+
+`SecUnicodeMapFile unicode.mapping 20127` unverändert lassen — der Pfad ist
+relativ zur `modsecurity.conf`, und `unicode.mapping` liegt daneben in `conf\`.
 
 `SecRuleEngine DetectionOnly` ist dort bereits Default — so lassen für den Rollout.
 
