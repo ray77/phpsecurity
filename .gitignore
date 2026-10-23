@@ -1,0 +1,8 @@
+src/
+build/
+dist/
+sdk/*
+!sdk/httpd-2.4.66-win64-VS17.zip
+*.tar.gz
+*.tar.xz
+.DS_Store

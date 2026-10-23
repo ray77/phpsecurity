@@ -1,0 +1,107 @@
+name: Build mod_security2 Win64 VS17
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  MODSEC_VERSION: "2.9.15"
+  MODSEC_SHA256: "4fae2d684672a24541607cb0b563d88b88eb4543b88cd090345149bb47309477"
+  LIBXML2_VERSION: "2.14.6"
+  LIBXML2_SHA256: "7ce458a0affeb83f0b55f1f4f9e0e55735dbfc1a9de124ee86fb4a66b597203a"
+  SDK_ZIP: "sdk/httpd-2.4.66-win64-VS17.zip"
+  SDK_SHA256: "2cd1f349b6705e43e784e876a233eeb1a859fa6b8abc693a91f87b35a368f7f9"
+
+jobs:
+  build:
+    # windows-2022 = Visual Studio 2022 = VS17 toolchain (matches Apache Lounge VS17)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify and extract Apache Lounge SDK
+        run: |
+          $h = (Get-FileHash $env:SDK_ZIP -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:SDK_SHA256) { throw "SDK SHA256 mismatch: $h" }
+          7z x -y $env:SDK_ZIP -o"$env:RUNNER_TEMP\sdk" | Out-Null
+          if (-not (Test-Path "$env:RUNNER_TEMP\sdk\Apache24\lib\libhttpd.lib")) { throw "SDK layout unexpected" }
+
+      - name: Download and verify ModSecurity source
+        run: |
+          curl.exe -sSLo modsec.tar.gz "https://github.com/owasp-modsecurity/ModSecurity/releases/download/v$($env:MODSEC_VERSION)/modsecurity-v$($env:MODSEC_VERSION).tar.gz"
+          $h = (Get-FileHash modsec.tar.gz -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:MODSEC_SHA256) { throw "ModSecurity SHA256 mismatch: $h" }
+          tar xzf modsec.tar.gz -C $env:RUNNER_TEMP
+
+      - name: Download and verify libxml2 source
+        run: |
+          $maj = ($env:LIBXML2_VERSION -split '\.')[0..1] -join '.'
+          curl.exe -sSLo libxml2.tar.xz "https://download.gnome.org/sources/libxml2/$maj/libxml2-$($env:LIBXML2_VERSION).tar.xz"
+          $h = (Get-FileHash libxml2.tar.xz -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne $env:LIBXML2_SHA256) { throw "libxml2 SHA256 mismatch: $h" }
+          tar xf libxml2.tar.xz -C $env:RUNNER_TEMP
+
+      - name: Build libxml2 (static, minimal)
+        run: |
+          cmake -S "$env:RUNNER_TEMP\libxml2-$($env:LIBXML2_VERSION)" -B "$env:RUNNER_TEMP\build-xml" `
+            -G "Visual Studio 17 2022" -A x64 `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DLIBXML2_WITH_ICONV=OFF `
+            -DLIBXML2_WITH_LZMA=OFF `
+            -DLIBXML2_WITH_ZLIB=OFF `
+            -DLIBXML2_WITH_PYTHON=OFF `
+            -DLIBXML2_WITH_HTTP=OFF `
+            -DLIBXML2_WITH_TESTS=OFF `
+            -DLIBXML2_WITH_PROGRAMS=OFF `
+            -DCMAKE_INSTALL_PREFIX="$env:RUNNER_TEMP\deps"
+          cmake --build "$env:RUNNER_TEMP\build-xml" --config Release --target install
+
+      - name: Build mod_security2.so
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DMODSEC_SRC="$env:RUNNER_TEMP\modsecurity-v$($env:MODSEC_VERSION)" `
+            -DAPACHE_SDK="$env:RUNNER_TEMP\sdk\Apache24" `
+            -DLIBXML2_PREFIX="$env:RUNNER_TEMP\deps"
+          cmake --build build --config Release
+          if (-not (Test-Path "build\Release\mod_security2.so")) { throw "module not built" }
+
+      - name: Smoke test (load module, block attack patterns)
+        run: |
+          pwsh -File test/smoke.ps1 `
+            -Apache "$env:RUNNER_TEMP\sdk\Apache24" `
+            -Module "build\Release\mod_security2.so" `
+            -ModsecSrc "$env:RUNNER_TEMP\modsecurity-v$($env:MODSEC_VERSION)" `
+            -Rules "rules\legacy-php-guard.conf"
+
+      - name: Package
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build\Release\mod_security2.so dist\
+          Copy-Item "$env:RUNNER_TEMP\modsecurity-v$($env:MODSEC_VERSION)\modsecurity.conf-recommended" dist\
+          Copy-Item "$env:RUNNER_TEMP\modsecurity-v$($env:MODSEC_VERSION)\unicode.mapping" dist\
+          Copy-Item rules\legacy-php-guard.conf dist\
+          Copy-Item docs\INSTALL-SERVER.md dist\
+          @"
+          mod_security2.so build info
+          ===========================
+          ModSecurity:  $env:MODSEC_VERSION (sha256 $env:MODSEC_SHA256)
+          PCRE2:        static lib from Apache Lounge SDK (pcre2-8-static.lib)
+          libxml2:      $env:LIBXML2_VERSION static (sha256 $env:LIBXML2_SHA256)
+          Apache SDK:   httpd-2.4.66 win64 VS17 Apache Lounge (sha256 $env:SDK_SHA256)
+          Toolchain:    Visual Studio 2022 (v143 / VS17), x64, /MD Release
+          Options:      PCRE2 + JIT, ohne curl/remote-rules, ohne Lua, ohne YAJL
+          Built:        $(Get-Date -Format o) on GitHub Actions windows-2022
+          Commit:       $env:GITHUB_SHA
+          "@ | Set-Content dist\BUILDINFO.txt
+          Get-ChildItem dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mod_security2-${{ env.MODSEC_VERSION }}-win64-VS17
+          path: dist/
+          if-no-files-found: error
