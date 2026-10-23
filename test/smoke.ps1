@@ -70,8 +70,8 @@ $b = 'xxxBOUNDARYxxx'
 $tmp = $env:TEMP
 
 try {
-    # 1. Benign GET -> 200
-    $code = & curl.exe -s -o NUL -w '%{http_code}' $base
+    # 1. Benign GET -> 200 (direkt /index.html: Minimal-Config hat kein mod_dir)
+    $code = & curl.exe -s -o NUL -w '%{http_code}' "${base}index.html"
     Check 'benign GET' $code @('200')
 
     # 2. Benign multipart POST (1 field + 1 small file) -> must NOT be blocked.
@@ -83,7 +83,7 @@ try {
             "Content-Type: text/plain`r`n`r`nhello`r`n" +
             "--$b--`r`n"
     [IO.File]::WriteAllText("$tmp\mp-ok.bin", $body, [Text.Encoding]::ASCII)
-    $code = & curl.exe -s -o NUL -w '%{http_code}' -H "Content-Type: multipart/form-data; boundary=$b" --data-binary "@$tmp\mp-ok.bin" $base
+    $code = & curl.exe -s -o NUL -w '%{http_code}' -H "Content-Type: multipart/form-data; boundary=$b" --data-binary "@$tmp\mp-ok.bin" "${base}index.html"
     Check 'benign multipart (not blocked)' $code @('405', '200')
 
     # 3. 350 GET args -> rule 1100007 -> 400
