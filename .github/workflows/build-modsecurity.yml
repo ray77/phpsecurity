@@ -32,18 +32,16 @@ jobs:
 
       - name: Download and verify ModSecurity source
         run: |
-          curl.exe -sSLo modsec.tar.gz "https://github.com/owasp-modsecurity/ModSecurity/releases/download/v$($env:MODSEC_VERSION)/modsecurity-v$($env:MODSEC_VERSION).tar.gz"
+          curl.exe -sSL --connect-timeout 30 --max-time 300 --retry 3 -o modsec.tar.gz "https://github.com/owasp-modsecurity/ModSecurity/releases/download/v$($env:MODSEC_VERSION)/modsecurity-v$($env:MODSEC_VERSION).tar.gz"
           $h = (Get-FileHash modsec.tar.gz -Algorithm SHA256).Hash.ToLower()
           if ($h -ne $env:MODSEC_SHA256) { throw "ModSecurity SHA256 mismatch: $h" }
           tar xzf modsec.tar.gz -C $env:RUNNER_TEMP
 
-      - name: Download and verify libxml2 source
+      - name: Verify and extract libxml2 source (vendored)
         run: |
-          $maj = ($env:LIBXML2_VERSION -split '\.')[0..1] -join '.'
-          curl.exe -sSLo libxml2.tar.xz "https://download.gnome.org/sources/libxml2/$maj/libxml2-$($env:LIBXML2_VERSION).tar.xz"
-          $h = (Get-FileHash libxml2.tar.xz -Algorithm SHA256).Hash.ToLower()
+          $h = (Get-FileHash "sdk/libxml2-$($env:LIBXML2_VERSION).tar.xz" -Algorithm SHA256).Hash.ToLower()
           if ($h -ne $env:LIBXML2_SHA256) { throw "libxml2 SHA256 mismatch: $h" }
-          tar xf libxml2.tar.xz -C $env:RUNNER_TEMP
+          tar xf "sdk/libxml2-$($env:LIBXML2_VERSION).tar.xz" -C $env:RUNNER_TEMP
 
       - name: Build libxml2 (static, minimal)
         run: |

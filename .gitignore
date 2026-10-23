@@ -3,6 +3,7 @@ build/
 dist/
 sdk/*
 !sdk/httpd-2.4.66-win64-VS17.zip
+!sdk/libxml2-2.14.6.tar.xz
 *.tar.gz
 *.tar.xz
 .DS_Store
